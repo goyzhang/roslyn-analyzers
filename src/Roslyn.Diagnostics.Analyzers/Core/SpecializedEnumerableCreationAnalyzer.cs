@@ -3,7 +3,9 @@
 using System;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading;
 using Analyzer.Utilities;
+using Analyzer.Utilities.Extensions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 
@@ -25,9 +27,9 @@ namespace Roslyn.Diagnostics.Analyzers
             RoslynDiagnosticIds.UseEmptyEnumerableRuleId,
             s_localizableTitleUseEmptyEnumerable,
             s_localizableMessageUseEmptyEnumerable,
-            DiagnosticCategory.RoslyDiagnosticsPerformance,
-            DiagnosticHelpers.DefaultDiagnosticSeverity,
-            isEnabledByDefault: DiagnosticHelpers.EnabledByDefaultIfNotBuildingVSIX,
+            DiagnosticCategory.RoslynDiagnosticsPerformance,
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
             customTags: WellKnownDiagnosticTags.Telemetry);
 
         private static readonly LocalizableString s_localizableTitleUseSingletonEnumerable = new LocalizableResourceString(nameof(RoslynDiagnosticsAnalyzersResources.UseSpecializedCollectionsSingletonEnumerableTitle), RoslynDiagnosticsAnalyzersResources.ResourceManager, typeof(RoslynDiagnosticsAnalyzersResources));
@@ -37,9 +39,9 @@ namespace Roslyn.Diagnostics.Analyzers
             RoslynDiagnosticIds.UseSingletonEnumerableRuleId,
             s_localizableTitleUseSingletonEnumerable,
             s_localizableMessageUseSingletonEnumerable,
-            DiagnosticCategory.RoslyDiagnosticsPerformance,
-            DiagnosticHelpers.DefaultDiagnosticSeverity,
-            isEnabledByDefault: DiagnosticHelpers.EnabledByDefaultIfNotBuildingVSIX,
+            DiagnosticCategory.RoslynDiagnosticsPerformance,
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
             customTags: WellKnownDiagnosticTags.Telemetry);
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(UseEmptyEnumerableRule, UseSingletonEnumerableRule);
@@ -53,7 +55,7 @@ namespace Roslyn.Diagnostics.Analyzers
             analysisContext.RegisterCompilationStartAction(
                 (context) =>
                 {
-                    INamedTypeSymbol specializedCollectionsSymbol = context.Compilation.GetTypeByMetadataName(SpecializedCollectionsMetadataName);
+                    INamedTypeSymbol? specializedCollectionsSymbol = context.Compilation.GetOrCreateTypeByMetadataName(SpecializedCollectionsMetadataName);
                     if (specializedCollectionsSymbol == null)
                     {
                         // TODO: In the future, we may want to run this analyzer even if the SpecializedCollections
@@ -63,13 +65,13 @@ namespace Roslyn.Diagnostics.Analyzers
                         return;
                     }
 
-                    INamedTypeSymbol genericEnumerableSymbol = WellKnownTypes.GenericIEnumerable(context.Compilation);
+                    INamedTypeSymbol? genericEnumerableSymbol = context.Compilation.GetOrCreateTypeByMetadataName(WellKnownTypeNames.SystemCollectionsGenericIEnumerable1);
                     if (genericEnumerableSymbol == null)
                     {
                         return;
                     }
 
-                    INamedTypeSymbol linqEnumerableSymbol = context.Compilation.GetTypeByMetadataName(LinqEnumerableMetadataName);
+                    INamedTypeSymbol? linqEnumerableSymbol = context.Compilation.GetOrCreateTypeByMetadataName(LinqEnumerableMetadataName);
                     if (linqEnumerableSymbol == null)
                     {
                         return;
@@ -77,7 +79,7 @@ namespace Roslyn.Diagnostics.Analyzers
 
                     if (!(linqEnumerableSymbol.GetMembers(EmptyMethodName).FirstOrDefault() is IMethodSymbol genericEmptyEnumerableSymbol) ||
                         genericEmptyEnumerableSymbol.Arity != 1 ||
-                        genericEmptyEnumerableSymbol.Parameters.Length != 0)
+                        !genericEmptyEnumerableSymbol.Parameters.IsEmpty)
                     {
                         return;
                     }
@@ -124,9 +126,9 @@ namespace Roslyn.Diagnostics.Analyzers
 
             public static ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(UseEmptyEnumerableRule, UseSingletonEnumerableRule);
 
-            protected bool ShouldAnalyzeArrayCreationExpression(SyntaxNode expression, SemanticModel semanticModel)
+            protected bool ShouldAnalyzeArrayCreationExpression(SyntaxNode expression, SemanticModel semanticModel, CancellationToken cancellationToken)
             {
-                TypeInfo typeInfo = semanticModel.GetTypeInfo(expression);
+                TypeInfo typeInfo = semanticModel.GetTypeInfo(expression, cancellationToken);
 
                 return typeInfo.ConvertedType != null &&
                     Equals(typeInfo.ConvertedType.OriginalDefinition, GenericEnumerableSymbol) &&
@@ -134,9 +136,9 @@ namespace Roslyn.Diagnostics.Analyzers
                     arrayType.Rank == 1;
             }
 
-            protected void AnalyzeMemberAccessName(SyntaxNode name, SemanticModel semanticModel, Action<Diagnostic> addDiagnostic)
+            protected void AnalyzeMemberAccessName(SyntaxNode name, SemanticModel semanticModel, Action<Diagnostic> addDiagnostic, CancellationToken cancellationToken)
             {
-                if (semanticModel.GetSymbolInfo(name).Symbol is IMethodSymbol methodSymbol &&
+                if (semanticModel.GetSymbolInfo(name, cancellationToken).Symbol is IMethodSymbol methodSymbol &&
                     Equals(methodSymbol.OriginalDefinition, _genericEmptyEnumerableSymbol))
                 {
                     addDiagnostic(Diagnostic.Create(UseEmptyEnumerableRule, name.Parent.GetLocation()));

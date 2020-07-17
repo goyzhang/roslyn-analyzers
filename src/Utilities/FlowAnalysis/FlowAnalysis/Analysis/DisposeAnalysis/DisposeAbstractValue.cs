@@ -50,21 +50,19 @@ namespace Microsoft.CodeAnalysis.FlowAnalysis.DataFlow.DisposeAnalysis
         [Conditional("DEBUG")]
         private static void VerifyArguments(ImmutableHashSet<IOperation> disposingOrEscapingOperations, DisposeAbstractValueKind kind)
         {
-            Debug.Assert(disposingOrEscapingOperations != null);
-
             switch (kind)
             {
                 case DisposeAbstractValueKind.NotDisposable:
                 case DisposeAbstractValueKind.NotDisposed:
                 case DisposeAbstractValueKind.Invalid:
                 case DisposeAbstractValueKind.Unknown:
-                    Debug.Assert(disposingOrEscapingOperations.Count == 0);
+                    Debug.Assert(disposingOrEscapingOperations.IsEmpty);
                     break;
 
                 case DisposeAbstractValueKind.Escaped:
                 case DisposeAbstractValueKind.Disposed:
                 case DisposeAbstractValueKind.MaybeDisposed:
-                    Debug.Assert(disposingOrEscapingOperations.Count > 0);
+                    Debug.Assert(!disposingOrEscapingOperations.IsEmpty);
                     break;
             }
         }

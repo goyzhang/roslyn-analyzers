@@ -19,6 +19,8 @@ namespace Microsoft.CodeAnalysis.FlowAnalysis.DataFlow.PointsToAnalysis
             _defaultPointsToValueMapBuilder = ImmutableDictionary.CreateBuilder<AnalysisEntity, PointsToAbstractValue>();
         }
 
+        public PointsToAnalysisKind PointsToAnalysisKind => _trackedEntitiesBuilder.PointsToAnalysisKind;
+
         public PointsToAbstractValue GetOrCreateDefaultValue(AnalysisEntity analysisEntity)
         {
             if (!_defaultPointsToValueMapBuilder.TryGetValue(analysisEntity, out PointsToAbstractValue value))
@@ -33,13 +35,15 @@ namespace Microsoft.CodeAnalysis.FlowAnalysis.DataFlow.PointsToAnalysis
                 {
                     return PointsToAbstractValue.NoLocation;
                 }
-                else if (analysisEntity.HasUnknownInstanceLocation)
+                else if (analysisEntity.HasUnknownInstanceLocation ||
+                    PointsToAnalysisKind != PointsToAnalysisKind.Complete &&
+                    analysisEntity.IsChildOrInstanceMemberNeedingCompletePointsToAnalysis())
                 {
                     return PointsToAbstractValue.Unknown;
                 }
 
                 value = PointsToAbstractValue.Create(AbstractLocation.CreateAnalysisEntityDefaultLocation(analysisEntity), mayBeNull: true);
-                _trackedEntitiesBuilder.AllEntities.Add(analysisEntity);
+                _trackedEntitiesBuilder.AddEntityAndPointsToValue(analysisEntity, value);
                 _defaultPointsToValueMapBuilder.Add(analysisEntity, value);
             }
 
@@ -47,6 +51,8 @@ namespace Microsoft.CodeAnalysis.FlowAnalysis.DataFlow.PointsToAnalysis
         }
 
         public bool IsTrackedEntity(AnalysisEntity analysisEntity) => _defaultPointsToValueMapBuilder.ContainsKey(analysisEntity);
+        public bool IsTrackedPointsToValue(PointsToAbstractValue value) => _trackedEntitiesBuilder.IsTrackedPointsToValue(value);
+        public void AddTrackedPointsToValue(PointsToAbstractValue value) => _trackedEntitiesBuilder.AddTrackedPointsToValue(value);
         public bool HasAnyTrackedEntity => _defaultPointsToValueMapBuilder.Count > 0;
     }
 }

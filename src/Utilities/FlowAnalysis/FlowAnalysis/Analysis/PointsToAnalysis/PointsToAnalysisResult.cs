@@ -12,18 +12,25 @@ namespace Microsoft.CodeAnalysis.FlowAnalysis.DataFlow.PointsToAnalysis
         private readonly ImmutableDictionary<IOperation, ImmutableHashSet<AbstractLocation>> _escapedLocationsThroughOperationsMap;
         private readonly ImmutableDictionary<IOperation, ImmutableHashSet<AbstractLocation>> _escapedLocationsThroughReturnValuesMap;
         private readonly ImmutableDictionary<AnalysisEntity, ImmutableHashSet<AbstractLocation>> _escapedLocationsThroughEntitiesMap;
+        private readonly ImmutableHashSet<AnalysisEntity> _trackedEntities;
+        private readonly ImmutableHashSet<PointsToAbstractValue> _trackedPointsToValues;
 
         internal PointsToAnalysisResult(
             DataFlowAnalysisResult<PointsToBlockAnalysisResult, PointsToAbstractValue> corePointsToAnalysisResult,
             ImmutableDictionary<IOperation, ImmutableHashSet<AbstractLocation>> escapedLocationsThroughOperationsMap,
             ImmutableDictionary<IOperation, ImmutableHashSet<AbstractLocation>> escapedLocationsThroughReturnValuesMap,
-            ImmutableDictionary<AnalysisEntity, ImmutableHashSet<AbstractLocation>> escapedLocationsThroughEntitiesMap)
+            ImmutableDictionary<AnalysisEntity, ImmutableHashSet<AbstractLocation>> escapedLocationsThroughEntitiesMap,
+            TrackedEntitiesBuilder trackedEntitiesBuilder)
             : base(corePointsToAnalysisResult)
         {
             _escapedLocationsThroughOperationsMap = escapedLocationsThroughOperationsMap;
             _escapedLocationsThroughReturnValuesMap = escapedLocationsThroughReturnValuesMap;
             _escapedLocationsThroughEntitiesMap = escapedLocationsThroughEntitiesMap;
+            (_trackedEntities, _trackedPointsToValues) = trackedEntitiesBuilder.ToImmutable();
+            PointsToAnalysisKind = trackedEntitiesBuilder.PointsToAnalysisKind;
         }
+
+        public PointsToAnalysisKind PointsToAnalysisKind { get; }
 
         public ImmutableHashSet<AbstractLocation> GetEscapedAbstractLocations(IOperation operation)
             => GetEscapedAbstractLocations(operation, _escapedLocationsThroughOperationsMap)
@@ -44,5 +51,11 @@ namespace Microsoft.CodeAnalysis.FlowAnalysis.DataFlow.PointsToAnalysis
 
             return ImmutableHashSet<AbstractLocation>.Empty;
         }
+
+        internal bool IsTrackedEntity(AnalysisEntity analysisEntity)
+            => _trackedEntities.Contains(analysisEntity);
+
+        internal bool IsTrackedPointsToValue(PointsToAbstractValue value)
+            => _trackedPointsToValues.Contains(value);
     }
 }

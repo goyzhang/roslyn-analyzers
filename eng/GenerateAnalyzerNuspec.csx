@@ -1,8 +1,10 @@
+using System.IO;
+
 string nuspecFile = Args[0];
 string assetsDir = Args[1];
 string projectDir = Args[2];
 string configuration = Args[3];
-string tfm = Args[4];
+string[] tfms = Args[4].Split(';');
 var metadataList = Args[5].Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
 var fileList = Args[6].Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
 var folderList = Args[7].Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
@@ -10,14 +12,16 @@ var assemblyList = Args[8].Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEn
 var dependencyList = Args[9].Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
 var libraryList = Args[10].Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
 var rulesetsDir = Args[11];
-var legacyRulesets = Args[12].Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
-var artifactsBinDir = Args[13];
-var analyzerDocumentationFileDir = Args[14];
-var analyzerDocumentationFileName = Args[15];
-var analyzerSarifFileDir = Args[16];
-var analyzerSarifFileName = Args[17];
-var analyzerConfigurationFileDir = Args[18];
-var analyzerConfigurationFileName = Args[19];
+var editorconfigsDir = Args[12];
+var legacyRulesets = Args[13].Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+var artifactsBinDir = Args[14];
+var analyzerDocumentationFileDir = Args[15];
+var analyzerDocumentationFileName = Args[16];
+var analyzerSarifFileDir = Args[17];
+var analyzerSarifFileName = Args[18];
+var analyzerConfigurationFileDir = Args[19];
+var analyzerConfigurationFileName = Args[20];
+var globalAnalyzerConfigsDir = Args[21];
 
 var result = new StringBuilder();
 
@@ -77,7 +81,7 @@ result.AppendLine(@"  <files>");
 
 string FileElement(string file, string target) => $@"    <file src=""{file}"" target=""{target}""/>";
 
-if (fileList.Length > 0 || assemblyList.Length > 0 || libraryList.Length > 0)
+if (fileList.Length > 0 || assemblyList.Length > 0 || libraryList.Length > 0 || folderList.Length > 0)
 {
     const string csName = "CSharp";
     const string vbName = "VisualBasic";
@@ -119,25 +123,29 @@ if (fileList.Length > 0 || assemblyList.Length > 0 || libraryList.Length > 0)
         }
 
         string assemblyNameWithoutExtension = Path.GetFileNameWithoutExtension(assembly);
-        string assemblyFolder = Path.Combine(artifactsBinDir, assemblyNameWithoutExtension, configuration, tfm);
-        string assemblyPathForNuspec = Path.Combine(assemblyNameWithoutExtension, configuration, tfm, assembly);
 
-        foreach (string target in targets)
+        foreach (var tfm in tfms)
         {
-            result.AppendLine(FileElement(assemblyPathForNuspec, target));
+            string assemblyFolder = Path.Combine(artifactsBinDir, assemblyNameWithoutExtension, configuration, tfm);
+            string assemblyPathForNuspec = Path.Combine(assemblyNameWithoutExtension, configuration, tfm, assembly);
 
-            if (Directory.Exists(assemblyFolder))
+            foreach (string target in targets)
             {
-                string resourceAssemblyName = assemblyNameWithoutExtension + ".resources.dll";
-                foreach (var directory in Directory.EnumerateDirectories(assemblyFolder))
+                result.AppendLine(FileElement(assemblyPathForNuspec, target));
+
+                if (Directory.Exists(assemblyFolder))
                 {
-                    var resourceAssemblyFullPath = Path.Combine(directory, resourceAssemblyName);
-                    if (File.Exists(resourceAssemblyFullPath))
+                    string resourceAssemblyName = assemblyNameWithoutExtension + ".resources.dll";
+                    foreach (var directory in Directory.EnumerateDirectories(assemblyFolder))
                     {
-                        var directoryName = Path.GetFileName(directory);
-                        string resourceAssemblyPathForNuspec = Path.Combine(assemblyNameWithoutExtension, configuration, tfm, directoryName, resourceAssemblyName);
-                        string targetForNuspec = Path.Combine(target, directoryName);
-                        result.AppendLine(FileElement(resourceAssemblyPathForNuspec, targetForNuspec));
+                        var resourceAssemblyFullPath = Path.Combine(directory, resourceAssemblyName);
+                        if (File.Exists(resourceAssemblyFullPath))
+                        {
+                            var directoryName = Path.GetFileName(directory);
+                            string resourceAssemblyPathForNuspec = Path.Combine(assemblyNameWithoutExtension, configuration, tfm, directoryName, resourceAssemblyName);
+                            string targetForNuspec = Path.Combine(target, directoryName);
+                            result.AppendLine(FileElement(resourceAssemblyPathForNuspec, targetForNuspec));
+                        }
                     }
                 }
             }
@@ -152,22 +160,35 @@ if (fileList.Length > 0 || assemblyList.Length > 0 || libraryList.Length > 0)
 
     foreach (string file in libraryList)
     {
-        var fileWithPath = Path.Combine(artifactsBinDir, Path.GetFileNameWithoutExtension(file), configuration, tfm, file);
-        result.AppendLine(FileElement(fileWithPath, Path.Combine("lib", tfm)));
+        foreach (var tfm in tfms)
+        {
+            var fileWithPath = Path.Combine(artifactsBinDir, Path.GetFileNameWithoutExtension(file), configuration, tfm, file);
+            
+            // For multi-tfm case, file may not exist for all tfms.
+            if (File.Exists(fileWithPath))
+            {
+                result.AppendLine(FileElement(fileWithPath, Path.Combine("lib", tfm)));
+            }
+        }
     }
 
     foreach (string folder in folderList)
     {
-        string folderPath = Path.Combine(artifactsBinDir, folder, configuration, tfm);
-        foreach (var file in Directory.EnumerateFiles(folderPath))
+        foreach (var tfm in tfms)
         {
-            var fileExtension = Path.GetExtension(file);
-            if (fileExtension == ".exe" ||
-                fileExtension == ".dll" ||
-                fileExtension == ".config")
+            string folderPath = Path.Combine(artifactsBinDir, folder, configuration, tfm);
+            foreach (var file in Directory.EnumerateFiles(folderPath))
             {
-                var fileWithPath = Path.Combine(folderPath, file);
-                result.AppendLine(FileElement(fileWithPath, folder));
+                var fileExtension = Path.GetExtension(file);
+                if (fileExtension == ".exe" ||
+                    fileExtension == ".dll" ||
+                    fileExtension == ".config" ||
+                    fileExtension == ".xml")
+                {
+                    var fileWithPath = Path.Combine(folderPath, file);
+                    var targetPath = tfms.Length > 1 ? Path.Combine(folder, tfm) : folder;
+                    result.AppendLine(FileElement(fileWithPath, targetPath));
+                }
             }
         }
     }
@@ -183,6 +204,30 @@ if (rulesetsDir.Length > 0 && Directory.Exists(rulesetsDir))
         if (Path.GetExtension(ruleset) == ".ruleset")
         {
             result.AppendLine(FileElement(Path.Combine(rulesetsDir, ruleset), "rulesets"));
+        }
+    }
+}
+
+if (editorconfigsDir.Length > 0 && Directory.Exists(editorconfigsDir))
+{
+    foreach (string directory in Directory.EnumerateDirectories(editorconfigsDir))
+    {
+        var directoryName = new DirectoryInfo(directory).Name;
+        foreach (string editorconfig in Directory.EnumerateFiles(directory))
+        {
+            result.AppendLine(FileElement(Path.Combine(directory, editorconfig), $"editorconfig\\{directoryName}"));
+        }
+    }
+}
+
+if (globalAnalyzerConfigsDir.Length > 0 && Directory.Exists(globalAnalyzerConfigsDir))
+{
+    foreach (string directory in Directory.EnumerateDirectories(globalAnalyzerConfigsDir))
+    {
+        var directoryName = new DirectoryInfo(directory).Name;
+        foreach (string editorconfig in Directory.EnumerateFiles(directory))
+        {
+            result.AppendLine(FileElement(Path.Combine(directory, editorconfig), $"build\\config\\{directoryName}"));
         }
     }
 }

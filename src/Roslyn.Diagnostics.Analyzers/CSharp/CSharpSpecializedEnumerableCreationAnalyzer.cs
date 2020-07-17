@@ -1,8 +1,8 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
-using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -41,7 +41,7 @@ namespace Roslyn.Diagnostics.CSharp.Analyzers
 
             public void AnalyzeNode(SyntaxNodeAnalysisContext context)
             {
-                System.Collections.Generic.IEnumerable<SyntaxNode> expressionsToAnalyze = context.Node.DescendantNodes().Where(n => ShouldAnalyzeExpression(n, context.SemanticModel));
+                System.Collections.Generic.IEnumerable<SyntaxNode> expressionsToAnalyze = context.Node.DescendantNodes().Where(n => ShouldAnalyzeExpression(n, context.SemanticModel, context.CancellationToken));
 
                 foreach (SyntaxNode expression in expressionsToAnalyze)
                 {
@@ -54,19 +54,19 @@ namespace Roslyn.Diagnostics.CSharp.Analyzers
                             AnalyzeInitializerExpression(((ImplicitArrayCreationExpressionSyntax)expression).Initializer, context.ReportDiagnostic);
                             break;
                         case SyntaxKind.SimpleMemberAccessExpression:
-                            AnalyzeMemberAccessName(((MemberAccessExpressionSyntax)expression).Name, context.SemanticModel, context.ReportDiagnostic);
+                            AnalyzeMemberAccessName(((MemberAccessExpressionSyntax)expression).Name, context.SemanticModel, context.ReportDiagnostic, context.CancellationToken);
                             break;
                     }
                 }
             }
 
-            private bool ShouldAnalyzeExpression(SyntaxNode expression, SemanticModel semanticModel)
+            private bool ShouldAnalyzeExpression(SyntaxNode expression, SemanticModel semanticModel, CancellationToken cancellationToken)
             {
                 switch (expression.Kind())
                 {
                     case SyntaxKind.ArrayCreationExpression:
                     case SyntaxKind.ImplicitArrayCreationExpression:
-                        return ShouldAnalyzeArrayCreationExpression(expression, semanticModel);
+                        return ShouldAnalyzeArrayCreationExpression(expression, semanticModel, cancellationToken);
                     case SyntaxKind.SimpleMemberAccessExpression:
                         return true;
                     default:
@@ -84,7 +84,6 @@ namespace Roslyn.Diagnostics.CSharp.Analyzers
                     if (arrayType.RankSpecifiers[0].ChildNodes()
                         .FirstOrDefault(n => n.Kind() == SyntaxKind.NumericLiteralExpression) is LiteralExpressionSyntax literalRankSpecifier)
                     {
-                        Debug.Assert(literalRankSpecifier.Token.Value != null);
                         AnalyzeArrayLength((int)literalRankSpecifier.Token.Value, arrayCreationExpression, addDiagnostic);
                         return;
                     }

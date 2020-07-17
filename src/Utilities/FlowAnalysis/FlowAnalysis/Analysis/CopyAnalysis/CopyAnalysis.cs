@@ -1,7 +1,9 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Diagnostics;
+using Analyzer.Utilities;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.FlowAnalysis.DataFlow.PointsToAnalysis;
 
 #pragma warning disable RS0026 // Do not add multiple public overloads with optional parameters
 
@@ -19,15 +21,15 @@ namespace Microsoft.CodeAnalysis.FlowAnalysis.DataFlow.CopyAnalysis
         {
         }
 
-        public static CopyAnalysisResult TryGetOrComputeResult(
+        public static CopyAnalysisResult? TryGetOrComputeResult(
             ControlFlowGraph cfg,
             ISymbol owningSymbol,
             AnalyzerOptions analyzerOptions,
             WellKnownTypeProvider wellKnownTypeProvider,
             InterproceduralAnalysisConfiguration interproceduralAnalysisConfig,
-            InterproceduralAnalysisPredicate interproceduralAnalysisPredicateOpt,
+            InterproceduralAnalysisPredicate? interproceduralAnalysisPredicateOpt,
             bool pessimisticAnalysis = true,
-            bool performPointsToAnalysis = true,
+            PointsToAnalysisKind pointsToAnalysisKind = PointsToAnalysisKind.PartialWithoutTrackingFieldsAndProperties,
             bool exceptionPathsAnalysis = false)
         {
             if (cfg == null)
@@ -36,8 +38,9 @@ namespace Microsoft.CodeAnalysis.FlowAnalysis.DataFlow.CopyAnalysis
                 return null;
             }
 
-            var pointsToAnalysisResultOpt = performPointsToAnalysis ?
-                PointsToAnalysis.PointsToAnalysis.TryGetOrComputeResult(cfg, owningSymbol, analyzerOptions, wellKnownTypeProvider, interproceduralAnalysisConfig,
+            var pointsToAnalysisResultOpt = pointsToAnalysisKind != PointsToAnalysisKind.None ?
+                PointsToAnalysis.PointsToAnalysis.TryGetOrComputeResult(cfg, owningSymbol, analyzerOptions,
+                    wellKnownTypeProvider, pointsToAnalysisKind, interproceduralAnalysisConfig,
                     interproceduralAnalysisPredicateOpt, pessimisticAnalysis, performCopyAnalysis: false, exceptionPathsAnalysis) :
                 null;
             var analysisContext = CopyAnalysisContext.Create(CopyAbstractValueDomain.Default, wellKnownTypeProvider,
@@ -46,7 +49,7 @@ namespace Microsoft.CodeAnalysis.FlowAnalysis.DataFlow.CopyAnalysis
             return TryGetOrComputeResultForAnalysisContext(analysisContext);
         }
 
-        private static CopyAnalysisResult TryGetOrComputeResultForAnalysisContext(CopyAnalysisContext analysisContext)
+        private static CopyAnalysisResult? TryGetOrComputeResultForAnalysisContext(CopyAnalysisContext analysisContext)
         {
             var operationVisitor = new CopyDataFlowOperationVisitor(analysisContext);
             var copyAnalysis = new CopyAnalysis(operationVisitor);

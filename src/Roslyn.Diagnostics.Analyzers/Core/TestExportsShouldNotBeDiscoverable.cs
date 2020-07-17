@@ -28,8 +28,8 @@ namespace Roslyn.Diagnostics.Analyzers
             RoslynDiagnosticIds.TestExportsShouldNotBeDiscoverableRuleId,
             s_localizableTitle,
             s_localizableMessage,
-            DiagnosticCategory.RoslyDiagnosticsReliability,
-            DiagnosticHelpers.DefaultDiagnosticSeverity,
+            DiagnosticCategory.RoslynDiagnosticsReliability,
+            DiagnosticSeverity.Warning,
             isEnabledByDefault: false,
             description: s_localizableDescription,
             helpLinkUri: null,
@@ -44,10 +44,10 @@ namespace Roslyn.Diagnostics.Analyzers
 
             context.RegisterCompilationStartAction(compilationContext =>
             {
-                var exportAttributeV1 = WellKnownTypes.MEFV1ExportAttribute(compilationContext.Compilation);
-                var exportAttributeV2 = WellKnownTypes.MEFV2ExportAttribute(compilationContext.Compilation);
-                var inheritedExportAttribute = WellKnownTypes.InheritedExportAttribute(compilationContext.Compilation);
-                var attributeUsageAttribute = WellKnownTypes.AttributeUsageAttribute(compilationContext.Compilation);
+                var exportAttributeV1 = compilationContext.Compilation.GetOrCreateTypeByMetadataName(WellKnownTypeNames.SystemComponentModelCompositionExportAttribute);
+                var exportAttributeV2 = compilationContext.Compilation.GetOrCreateTypeByMetadataName(WellKnownTypeNames.SystemCompositionExportAttribute);
+                var inheritedExportAttribute = compilationContext.Compilation.GetOrCreateTypeByMetadataName(WellKnownTypeNames.SystemComponentModelCompositionInheritedExportAttribute);
+                var attributeUsageAttribute = compilationContext.Compilation.GetOrCreateTypeByMetadataName(WellKnownTypeNames.SystemAttributeUsageAttribute);
 
                 if (exportAttributeV1 is null && exportAttributeV2 is null)
                 {
@@ -67,7 +67,7 @@ namespace Roslyn.Diagnostics.Analyzers
             });
         }
 
-        private static void AnalyzeSymbolForAttribute(ref SymbolAnalysisContext context, INamedTypeSymbol exportAttributeOpt, INamedTypeSymbol namedType, IEnumerable<AttributeData> exportAttributes, IEnumerable<AttributeData> namedTypeAttributes)
+        private static void AnalyzeSymbolForAttribute(ref SymbolAnalysisContext context, INamedTypeSymbol? exportAttributeOpt, INamedTypeSymbol namedType, IEnumerable<AttributeData> exportAttributes, IEnumerable<AttributeData> namedTypeAttributes)
         {
             if (exportAttributeOpt is null)
             {
@@ -85,7 +85,7 @@ namespace Roslyn.Diagnostics.Analyzers
                 && Equals(ad.AttributeClass.ContainingNamespace, exportAttributeOpt.ContainingNamespace)))
             {
                 // '{0}' is exported for test purposes and should be marked PartNotDiscoverable
-                context.ReportDiagnostic(Diagnostic.Create(Rule, exportAttributeApplication.ApplicationSyntaxReference.GetSyntax().GetLocation(), namedType.Name));
+                context.ReportDiagnostic(Diagnostic.Create(Rule, exportAttributeApplication.ApplicationSyntaxReference.GetSyntax(context.CancellationToken).GetLocation(), namedType.Name));
             }
         }
     }

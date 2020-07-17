@@ -53,7 +53,7 @@ namespace Microsoft.CodeAnalysis.CSharp.PerformanceSensitiveAnalyzers
             Action<Diagnostic> reportDiagnostic = context.ReportDiagnostic;
             var cancellationToken = context.CancellationToken;
 
-            var invocationExpression = node as InvocationExpressionSyntax;
+            var invocationExpression = (InvocationExpressionSyntax)node;
 
             if (semanticModel.GetSymbolInfo(invocationExpression, cancellationToken).Symbol is IMethodSymbol methodInfo)
             {
@@ -62,9 +62,9 @@ namespace Microsoft.CodeAnalysis.CSharp.PerformanceSensitiveAnalyzers
                     CheckNonOverridenMethodOnStruct(methodInfo, reportDiagnostic, invocationExpression);
                 }
 
-                if (methodInfo.Parameters.Length > 0 && invocationExpression.ArgumentList != null)
+                if (!methodInfo.Parameters.IsEmpty && invocationExpression.ArgumentList != null)
                 {
-                    var lastParam = methodInfo.Parameters[methodInfo.Parameters.Length - 1];
+                    var lastParam = methodInfo.Parameters[^1];
                     if (lastParam.IsParams)
                     {
                         CheckParam(invocationExpression, methodInfo, semanticModel, reportDiagnostic, cancellationToken);
@@ -77,6 +77,16 @@ namespace Microsoft.CodeAnalysis.CSharp.PerformanceSensitiveAnalyzers
         private static void CheckParam(InvocationExpressionSyntax invocationExpression, IMethodSymbol methodInfo, SemanticModel semanticModel, Action<Diagnostic> reportDiagnostic, CancellationToken cancellationToken)
         {
             var arguments = invocationExpression.ArgumentList.Arguments;
+            if (arguments.Count == methodInfo.Parameters.Length - 1)
+            {
+                // Up to net45 the System.Array.Empty<T> singleton didn't existed so an empty params array was still causing some memory allocation.
+                if (semanticModel.Compilation.GetSpecialType(SpecialType.System_Array).GetMembers("Empty").IsEmpty)
+                {
+                    reportDiagnostic(Diagnostic.Create(ParamsParameterRule, invocationExpression.GetLocation(), EmptyMessageArgs));
+                }
+                return;
+            }
+
             if (arguments.Count != methodInfo.Parameters.Length)
             {
                 reportDiagnostic(Diagnostic.Create(ParamsParameterRule, invocationExpression.GetLocation(), EmptyMessageArgs));

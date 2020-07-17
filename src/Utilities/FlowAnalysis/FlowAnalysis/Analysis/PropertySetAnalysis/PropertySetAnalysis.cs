@@ -44,7 +44,7 @@ namespace Analyzer.Utilities.FlowAnalysis.Analysis.PropertySetAnalysis
         /// <param name="interproceduralAnalysisConfig">Interprocedural dataflow analysis configuration.</param>
         /// <param name="pessimisticAnalysis">Whether to be pessimistic.</param>
         /// <returns>Property set analysis result.</returns>
-        internal static PropertySetAnalysisResult GetOrComputeResult(
+        internal static PropertySetAnalysisResult? GetOrComputeResult(
             ControlFlowGraph cfg,
             Compilation compilation,
             ISymbol owningSymbol,
@@ -75,8 +75,8 @@ namespace Analyzer.Utilities.FlowAnalysis.Analysis.PropertySetAnalysis
 
             var wellKnownTypeProvider = WellKnownTypeProvider.GetOrCreate(compilation);
 
-            PointsToAnalysisResult pointsToAnalysisResult;
-            ValueContentAnalysisResult valueContentAnalysisResultOpt;
+            PointsToAnalysisResult? pointsToAnalysisResult;
+            ValueContentAnalysisResult? valueContentAnalysisResultOpt;
             if (!constructorMapper.RequiresValueContentAnalysis && !propertyMappers.RequiresValueContentAnalysis)
             {
                 pointsToAnalysisResult = PointsToAnalysis.TryGetOrComputeResult(
@@ -84,6 +84,7 @@ namespace Analyzer.Utilities.FlowAnalysis.Analysis.PropertySetAnalysis
                     owningSymbol,
                     analyzerOptions,
                     wellKnownTypeProvider,
+                    PointsToAnalysisKind.Complete,
                     interproceduralAnalysisConfig,
                     interproceduralAnalysisPredicateOpt: null,
                     pessimisticAnalysis,
@@ -102,6 +103,7 @@ namespace Analyzer.Utilities.FlowAnalysis.Analysis.PropertySetAnalysis
                     owningSymbol,
                     analyzerOptions,
                     wellKnownTypeProvider,
+                    PointsToAnalysisKind.Complete,
                     interproceduralAnalysisConfig,
                     out var copyAnalysisResult,
                     out pointsToAnalysisResult,
@@ -131,6 +133,7 @@ namespace Analyzer.Utilities.FlowAnalysis.Analysis.PropertySetAnalysis
             var result = TryGetOrComputeResultForAnalysisContext(analysisContext);
             return result;
         }
+
         /// <summary>
         /// Gets hazardous usages of an object based on a set of its properties.
         /// </summary>
@@ -144,7 +147,7 @@ namespace Analyzer.Utilities.FlowAnalysis.Analysis.PropertySetAnalysis
         /// <param name="pessimisticAnalysis">Whether to be pessimistic.</param>
         /// <returns>Dictionary of <see cref="Location"/> and <see cref="IMethodSymbol"/> pairs mapping to the kind of hazardous usage (Flagged or MaybeFlagged).  The method in the key is null for return/initialization statements.</returns>
         /// <remarks>Unlike <see cref="GetOrComputeResult"/>, this overload also performs DFA on all descendant local and anonymous functions.</remarks>
-        public static PooledDictionary<(Location Location, IMethodSymbol Method), HazardousUsageEvaluationResult> BatchGetOrComputeHazardousUsages(
+        public static PooledDictionary<(Location Location, IMethodSymbol? Method), HazardousUsageEvaluationResult>? BatchGetOrComputeHazardousUsages(
             Compilation compilation,
             IEnumerable<(IOperation Operation, ISymbol ContainingSymbol)> rootOperationsNeedingAnalysis,
             AnalyzerOptions analyzerOptions,
@@ -180,7 +183,7 @@ namespace Analyzer.Utilities.FlowAnalysis.Analysis.PropertySetAnalysis
         /// <param name="pessimisticAnalysis">Whether to be pessimistic.</param>
         /// <returns>Dictionary of <see cref="Location"/> and <see cref="IMethodSymbol"/> pairs mapping to the kind of hazardous usage (Flagged or MaybeFlagged).  The method in the key is null for return/initialization statements.</returns>
         /// <remarks>Unlike <see cref="GetOrComputeResult"/>, this overload also performs DFA on all descendant local and anonymous functions.</remarks>
-        public static PooledDictionary<(Location Location, IMethodSymbol Method), HazardousUsageEvaluationResult> BatchGetOrComputeHazardousUsages(
+        public static PooledDictionary<(Location Location, IMethodSymbol? Method), HazardousUsageEvaluationResult>? BatchGetOrComputeHazardousUsages(
             Compilation compilation,
             IEnumerable<(IOperation Operation, ISymbol ContainingSymbol)> rootOperationsNeedingAnalysis,
             AnalyzerOptions analyzerOptions,
@@ -191,10 +194,10 @@ namespace Analyzer.Utilities.FlowAnalysis.Analysis.PropertySetAnalysis
             InterproceduralAnalysisConfiguration interproceduralAnalysisConfig,
             bool pessimisticAnalysis = false)
         {
-            PooledDictionary<(Location Location, IMethodSymbol Method), HazardousUsageEvaluationResult> allResults = null;
+            PooledDictionary<(Location Location, IMethodSymbol? Method), HazardousUsageEvaluationResult>? allResults = null;
             foreach ((IOperation Operation, ISymbol ContainingSymbol) in rootOperationsNeedingAnalysis)
             {
-                var success = Operation.TryGetEnclosingControlFlowGraph(out ControlFlowGraph enclosingControlFlowGraph);
+                var success = Operation.TryGetEnclosingControlFlowGraph(out ControlFlowGraph? enclosingControlFlowGraph);
                 Debug.Assert(success);
                 if (enclosingControlFlowGraph == null)
                 {
@@ -202,7 +205,7 @@ namespace Analyzer.Utilities.FlowAnalysis.Analysis.PropertySetAnalysis
                     continue;
                 }
 
-                PropertySetAnalysisResult enclosingResult = InvokeDfaAndAccumulateResults(
+                PropertySetAnalysisResult? enclosingResult = InvokeDfaAndAccumulateResults(
                     enclosingControlFlowGraph,
                     ContainingSymbol);
                 if (enclosingResult == null)
@@ -237,9 +240,9 @@ namespace Analyzer.Utilities.FlowAnalysis.Analysis.PropertySetAnalysis
             return allResults;
 
             // Merges results from single PropertySet DFA invocation into allResults.
-            PropertySetAnalysisResult InvokeDfaAndAccumulateResults(ControlFlowGraph cfg, ISymbol owningSymbol)
+            PropertySetAnalysisResult? InvokeDfaAndAccumulateResults(ControlFlowGraph cfg, ISymbol owningSymbol)
             {
-                PropertySetAnalysisResult propertySetAnalysisResult =
+                PropertySetAnalysisResult? propertySetAnalysisResult =
                     PropertySetAnalysis.GetOrComputeResult(
                         cfg,
                         compilation,
@@ -258,10 +261,10 @@ namespace Analyzer.Utilities.FlowAnalysis.Analysis.PropertySetAnalysis
 
                 if (allResults == null)
                 {
-                    allResults = PooledDictionary<(Location Location, IMethodSymbol Method), HazardousUsageEvaluationResult>.GetInstance();
+                    allResults = PooledDictionary<(Location Location, IMethodSymbol? Method), HazardousUsageEvaluationResult>.GetInstance();
                 }
 
-                foreach (KeyValuePair<(Location Location, IMethodSymbol Method), HazardousUsageEvaluationResult> kvp
+                foreach (KeyValuePair<(Location Location, IMethodSymbol? Method), HazardousUsageEvaluationResult> kvp
                     in propertySetAnalysisResult.HazardousUsages)
                 {
                     if (allResults.TryGetValue(kvp.Key, out HazardousUsageEvaluationResult existingValue))
@@ -300,7 +303,7 @@ namespace Analyzer.Utilities.FlowAnalysis.Analysis.PropertySetAnalysis
             }
         }
 
-        private static PropertySetAnalysisResult TryGetOrComputeResultForAnalysisContext(PropertySetAnalysisContext analysisContext)
+        private static PropertySetAnalysisResult? TryGetOrComputeResultForAnalysisContext(PropertySetAnalysisContext analysisContext)
         {
             var operationVisitor = new PropertySetDataFlowOperationVisitor(analysisContext);
             var analysis = new PropertySetAnalysis(PropertySetAnalysisDomainInstance, operationVisitor);
